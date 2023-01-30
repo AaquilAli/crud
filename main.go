@@ -1,106 +1,95 @@
-// main.go
 package main
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
+	"strconv"
+
 	"github.com/gorilla/mux"
 )
 
-// Article - Our struct for all articles
-type Article struct {
-	Id      string `json:"Id"`
-	Title   string `json:"Title"`
-	Desc    string `json:"desc"`
-	Content string `json:"content"`
+type Movie struct {
+	ID       string    `json:"id"`
+	Isbn     string    `json:"isbn"`
+	Title    string    `json:"title"`
+	Director *Director `json:"director"`
+}
+type Director struct {
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
 }
 
-var Articles []Article
+var movies []Movie
 
-func homePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Welcome to the HomePage!")
-	fmt.Println("Endpoint Hit: homePage")
+func getMovies(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(movies)
+
 }
 
-func returnAllArticles(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: returnAllArticles")
-	json.NewEncoder(w).Encode(Articles)
+func deleteMovie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	for index, item := range movies {
+		if item.ID == params["id"] {
+			movies = append(movies[:index], movies[index+1:]...)
+		}
+	}
+	json.NewEncoder(w).Encode(movies)
 }
 
-func returnSingleArticle(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	key := vars["id"]
-
-	for _, article := range Articles {
-		if article.Id == key {
-			json.NewEncoder(w).Encode(article)
+func getMovie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	for _, item := range movies {
+		if item.ID == params["id"] {
+			json.NewEncoder(w).Encode(item)
+			return
 		}
 	}
 }
 
-func createNewArticle(w http.ResponseWriter, r *http.Request) {
-	// get the body of our POST request
-	// unmarshal this into a new Article struct
-	// append this to our Articles array.
-	reqBody, _ := ioutil.ReadAll(r.Body)
-	var article Article
-	json.Unmarshal(reqBody, &article)
-	// update our global Articles array to include
-	// our new Article
-	Articles = append(Articles, article)
-
-	json.NewEncoder(w).Encode(article)
+func createMovie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var movie Movie
+	_ = json.NewDecoder(r.Body).Decode(&movie)
+	movie.ID = strconv.Itoa(rand.Intn(10000000))
+	movies = append(movies, movie)
+	json.NewEncoder(w).Encode(movie)
 }
 
-func deleteArticle(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("Hitting the DELETE")
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	for index, article := range Articles {
-		if article.Id == id {
-			Articles = append(Articles[:index], Articles[index+1:]...)
-			break
-		}
-	}
-
-}
-
-func updateArticle(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("Hitting thre update")
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	for index, article := range Articles {
-		if article.Id == id {
-			Articles = append(Articles[:index], Articles[index+1:]...)
-			reqBody, _ := ioutil.ReadAll(r.Body)
-			var article1 Article
-			json.Unmarshal(reqBody, &article1)
-			Articles = append(Articles, article1)
-			break
+func updateMovie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	for index, item := range movies {
+		if item.ID == params["id"] {
+			movies = append(movies[:index], movies[index+1:]...)
+			var movie Movie
+			_ = json.NewDecoder(r.Body).Decode(&movie)
+			movie.ID = params["id"]
+			movies = append(movies, movie)
+			json.NewEncoder(w).Encode(movie)
+			return
 		}
 	}
 }
-
-func handleRequests() {
-	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/", homePage)
-	myRouter.HandleFunc("/articles", returnAllArticles).Methods("GET")
-	myRouter.HandleFunc("/article", createNewArticle).Methods("POST")
-	myRouter.HandleFunc("/articles/{id}", updateArticle).Methods("PUT")
-	myRouter.HandleFunc("/articles/{id}", deleteArticle).Methods("DELETE")
-	myRouter.HandleFunc("/articles/{id}", returnSingleArticle)
-	log.Fatal(http.ListenAndServe(":10000", myRouter))
-}
-
 func main() {
-	Articles = []Article{
-		{Id: "1", Title: "Hello", Desc: "Article Description", Content: "Article Content"},
-		{Id: "2", Title: "Hello 2", Desc: "Article Description", Content: "Article Content"},
-	}
-	handleRequests()
+
+	movies = append(movies, Movie{ID: "1", Isbn: "4322", Title: "First Movie", Director: &Director{FirstName: "Will", LastName: "Smith"}})
+	movies = append(movies, Movie{ID: "2", Isbn: "4333", Title: "Second Movie", Director: &Director{FirstName: "Steve", LastName: "Smith"}})
+	r := mux.NewRouter()
+	r.HandleFunc("/movies", getMovies).Methods("GET")
+	r.HandleFunc("/movies/{id}", getMovie).Methods("GET")
+	r.HandleFunc("/movies", createMovie).Methods("POST")
+	r.HandleFunc("/movies/{id}", updateMovie).Methods("PUT")
+	r.HandleFunc("/movies/{id}", deleteMovie).Methods("DELETE")
+
+	fmt.Printf("Startig the function")
+
+	log.Fatal(http.ListenAndServe(":8080", r))
+
 }
